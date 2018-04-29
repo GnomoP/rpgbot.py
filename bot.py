@@ -9,7 +9,7 @@ import logging
 import json as json_parser
 from random import randrange
 from datetime import datetime
-from subprocess import Popen
+from subprocess import Popen, PIPE
 import discord
 from discord import abc
 from discord.ext import commands
@@ -73,6 +73,7 @@ class Client(commands.Bot):
     self.add_command(self.purge)
     self.add_command(self.shell)
     self.add_command(self._eval)
+    self.add_command(self._python)
     self.add_command(self._say)
 
   def __call__(self):
@@ -263,6 +264,9 @@ class Client(commands.Bot):
       self._wlist = self.config["wlist"]
       self._blist = self.config["blist"]
 
+      game = discord.Game(self.config["status"])
+      await self.change_presence(status=discord.Status.online, activity=game)
+
     except Exception as e:
       await ctx.message.add_reaction("❌")
       self.print(e)
@@ -278,10 +282,9 @@ class Client(commands.Bot):
 
   # def inventory(quant, *, item):
   @commands.command()
-  async def inventory(self, ctx, quant, *, item):
-    p = re.search(
-      r'^(\s*[+-]*\d+(\.\d+)*([Ee][+-]*\d+)*\s*)|(\?+)|(-+)$',
-      quant)
+  async def inventory(self, ctx, quant, *, item=None):
+    p = r'^(\s*[+-]*\d+(\.\d+)*([Ee][+-]*\d+)*\s*)|(\?+)|(-+)$'
+    p = re.search(p, quant)
 
     if not p:
       await ctx.message.add_reaction("❌")
@@ -291,6 +294,10 @@ class Client(commands.Bot):
 
     # inv_fp = "%s/inv/.json" % rootdir
     inv_fp = "%s/inv/%s.json" % (rootdir, ctx.message.author.id)
+    if not os.path.exists(inv_fp):
+      with open(inv_fp, "a+") as data:
+        data.close()
+
     with open(inv_fp, "r+") as data:
       data.seek(0)
       if not data.read():
@@ -300,8 +307,13 @@ class Client(commands.Bot):
       data.seek(0)
       inv_js = json_parser.load(data)
 
-    item = item.lower()
+    item = item.lower() if item is not None else None
     if quant == "?":
+      if item is None:
+        inv_fp = discord.File(inv_fp)
+        await ctx.send(file=inv_fp, delete_after=10.0)
+        return
+      
       inum = inv_js.get(item, 0)
 
     elif quant == "-":
@@ -323,7 +335,6 @@ class Client(commands.Bot):
     fmt = "{0.display_name} has {1} '{2}'"
     # print(fmt.format(inum, item))
     await ctx.send(fmt.format(ctx.message.author, inum, item))
-
 
   @commands.is_owner()
   @commands.command()
@@ -434,9 +445,55 @@ class Client(commands.Bot):
     if filepath.startswith("-/"):
       filepath.replace("-/", "~/Pictures")
 
-  @commands.command(name="eval")
+  @commands.command(name="python2", aliases=["py2"])
+  async def _python(self, ctx, *, pycode):
+    pycode = self.trim_codeblocks(pycode)
+    args = "{} << EOF\n{}\nEOF".format("python2", pycode)
+
+    out, e = Popen(
+      args,
+      shell=True,
+      stderr=PIPE,
+      stdout=PIPE,
+      stdin=PIPE
+    ).communicate()
+
+    out = out.decode("utf-8")
+    e = e.decode("utf-8")
+
+    if e:
+      out += "\n" + "\n".join(e.splitlines())
+    
+    try:
+      await ctx.send("```\n%s```" % out)
+    except Exception as e:
+      await ctx.message.add_reaction("❌")
+      self.print(e)
+
+  @commands.command(name="eval", aliases=["python", "py"])
   async def _eval(self, ctx, *, pycode):
-    eval(self.trim_codeblocks(pycode), globals=None, locals=None)
+    pycode = self.trim_codeblocks(pycode)
+    args = "{} << EOF\n{}\nEOF".format(sys.executable, pycode)
+
+    out, e = Popen(
+      args,
+      shell=True,
+      stderr=PIPE,
+      stdout=PIPE,
+      stdin=PIPE
+    ).communicate()
+
+    out = out.decode("utf-8")
+    e = e.decode("utf-8")
+
+    if e:
+      out += "\n" + "\n".join(e.splitlines())
+    
+    try:
+      await ctx.send("```\n%s```" % out)
+    except Exception as e:
+      await ctx.message.add_reaction("❌")
+      self.print(e)
 
   @commands.is_owner()
   @commands.command(name="say")
