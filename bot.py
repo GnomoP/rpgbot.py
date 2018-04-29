@@ -279,7 +279,10 @@ class Client(commands.Bot):
   # def inventory(quant, *, item):
   @commands.command()
   async def inventory(self, ctx, quant, *, item):
-    p = re.search(r'^(\s*[+-]*\d+(\.\d+)*([Ee][+-]*\d+)*\s*)|(\?+)|(-+)$', quant)
+    p = re.search(
+      r'^(\s*[+-]*\d+(\.\d+)*([Ee][+-]*\d+)*\s*)|(\?+)|(-+)$',
+      quant)
+
     if not p:
       await ctx.message.add_reaction("❌")
       # print("Bad value given to inventory command: '%s'" % quant)
@@ -329,14 +332,15 @@ class Client(commands.Bot):
       args_raw = args_raw.replace("#i#", "­").split(" | ")
       args = {}
       embed = discord.Embed()
+      empty = discord.Empty
       invis = "­"
   
       for arg in args_raw:
           arg = arg.split(" = ")
           arg[1] = arg[1] if arg[1] != "invis" else invis
-          args[arg[0]] = arg[1] if arg[1] != "Empty" else Empty
+          args[arg[0]] = arg[1] if arg[1] != "empty" else empty
   
-      embed.title = args["title"] if "title" in args else Empty
+      embed.title = args["title"] if "title" in args else empty
   
       if "desc" in args:
           embed.description = args["desc"]
@@ -354,14 +358,14 @@ class Client(commands.Bot):
           embed.set_thumbnail(url=args["thumbnail"])
   
       embed.set_footer(
-          text=args["footer"] if "footer" in args else Empty,
-          icon_url=args["footer_img"] if "footer_img" in args else Empty)
+          text=args["footer"] if "footer" in args else empty,
+          icon_url=args["footer_img"] if "footer_img" in args else empty)
   
       if "author" in args:
           embed.set_author(
               name=args["author"],
-              url=args["author_url"] if "author_url" in args else Empty,
-              icon_url=args["author_img"] if "author_img" in args else Empty)
+              url=args["author_url"] if "author_url" in args else empty,
+              icon_url=args["author_img"] if "author_img" in args else empty)
   
       for arg in args:
           if "field" in arg and "value" not in arg:
