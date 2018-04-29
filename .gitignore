@@ -1,0 +1,13 @@
+config.json
+discord.log
+bot-org.py
+
+activate
+__pycache
+
+.vscode/
+env/
+inv/
+
+*~
+*.swp

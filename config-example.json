@@ -1,0 +1,35 @@
+{
+  "logging_level": "INFO",
+  
+  "opt": {
+    "filename": "discord.log",
+    "encoding": "utf-8",
+    "mode": "a"
+  },
+
+  "delete_timeout": 3,
+
+  "args": [],
+
+  "kwargs": {
+    "self_bot": false
+  },
+
+  "prefix": "!",
+  "token": "your token here",
+
+  "announcements": "",
+  "status": "with the API",
+
+  "wlist": {
+    "guilds": [],
+    "channels": [],
+    "users": []
+  },
+
+  "blist": {
+    "guilds": [],
+    "channels": [],
+    "users": []
+  }
+}
