@@ -130,6 +130,43 @@ class Client(commands.Bot):
     else:
       return False
 
+  async def message_dialogs(self, ctx, message, time=10.0):
+    # await ctx.message.add_reaction('✅')
+    await message.add_reaction('📌')
+    await message.add_reaction('❌')
+
+    def check_1(react, user):
+      a = user.id == ctx.message.author.id
+      b = str(react.emoji) in ('📌', '❌')
+      return a and b
+    
+    def check_2(react, user):
+      a = user.id == ctx.message.author.id
+      b = str(react.emoji) == '📌'
+      return a and b
+    
+    try:
+      react, user = await self.wait_for(
+        "reaction_add", timeout=time, check=check_1)
+    except asyncio.TimeoutError as e:
+      return await message.delete()
+    react = str(react.emoji)
+
+    if react == '📌':
+      react, user = await self.wait_for(
+        "reaction_remove", check=check_2)
+      await message.delete()
+    elif react == '❌':
+      pass
+    else:
+      await asyncio.sleep(time)
+    await message.delete()
+
+    try:
+      await ctx.message.delete()
+    except Exception as e:
+      pass
+
   async def on_connect(self):
     self.print("Connected to Discord...")
     await self.wait_until_ready()
@@ -145,7 +182,7 @@ class Client(commands.Bot):
       await self.process_commands(m)
 
     # Match die rolls (D20, d2 etc.)
-    p = re.compile(r'^\s*[Dd]\d+\s*$')
+    p = re.compile(r'^\s*[Dd][+-]*\d+\s*$')
     if p.match(m.clean_content):
       out = "Rolled **{0}** from a D{1}"
 
@@ -276,7 +313,7 @@ class Client(commands.Bot):
       await self.change_presence(status=discord.Status.online, activity=game)
 
     except Exception as e:
-      await ctx.message.add_reaction("❌")
+      await ctx.message.add_reaction("❗")
       self.print(e)
     else:
       await ctx.message.add_reaction("🔁")
@@ -289,13 +326,13 @@ class Client(commands.Bot):
       pass
 
   # def inventory(quant, *, item):
-  @commands.command()
+  @commands.command(aliases=["inv"])
   async def inventory(self, ctx, quant, *, item=None):
     p = r'^(\s*[+-]*\d+(\.\d+)*([Ee][+-]*\d+)*\s*)|(\?+)|(-+)$'
     p = re.search(p, quant)
 
     if not p:
-      await ctx.message.add_reaction("❌")
+      await ctx.message.add_reaction("❗")
       # print("Bad value given to inventory command: '%s'" % quant)
       self.print("Bad value given to inventory command: '%s'" % quant)
       return
@@ -308,7 +345,7 @@ class Client(commands.Bot):
     with open(inv_fp, "r+") as data:
       data.seek(0)
       if not data.read():
-        data.write("{\n}")
+        data.write("{\n\n}")
         data.truncate()
       
       data.seek(0)
@@ -318,17 +355,26 @@ class Client(commands.Bot):
     if quant == "?":
       if item is None:
         out = "```json\n{}\n```".format(json_dumps(inv_js))
-        await ctx.send(out, delete_after=10.0)
+        if len(out) > 2000:
+          out = out[:-10] + "\n...\n}```"
+        m = await ctx.send(out)
+        await self.message_dialogs(ctx, m, 10.0)
         return
       
       inum = inv_js.get(item, 0)
 
     elif quant == "-":
+      inv_js.pop(item, None)
+
       with open(inv_fp, "w") as data:
-        inv_js.pop(item, None)
         json_dump(inv_js, data)
 
     else:
+      if item is None:
+        m = await ctx.send("`item is a required argument that is missing.`")
+        await self.message_dialogs(ctx, m, 10.0)
+        return
+
       inum = eval(quant)
       if float(inum).is_integer:
         inum = int(inum)
@@ -341,7 +387,8 @@ class Client(commands.Bot):
     # fmt = "Player has {0} '{1}'"
     fmt = "{0.display_name} has {1} '{2}'"
     # print(fmt.format(inum, item))
-    await ctx.send(fmt.format(ctx.message.author, inum, item))
+    m = await ctx.send(fmt.format(ctx.message.author, inum, item))
+    await self.message_dialogs(ctx, m, 10.0)
 
   @commands.is_owner()
   @commands.command()
@@ -405,13 +452,13 @@ class Client(commands.Bot):
       try:
         await ctx.message.add_reaction('⏸')
       except Exception as e:
-        await ctx.message.add_reaction("❌")
+        await ctx.message.add_reaction("❗")
         self.print(e)
     else:
       try:
         await ctx.message.add_reaction('⏩')
       except Exception as e:
-        await ctx.message.add_reaction("❌")
+        await ctx.message.add_reaction("❗")
         self.print(e)
 
     await asyncio.sleep(self.t) if self.t else None
@@ -474,7 +521,7 @@ class Client(commands.Bot):
     try:
       await ctx.send("```\n%s```" % out)
     except Exception as e:
-      await ctx.message.add_reaction("❌")
+      await ctx.message.add_reaction("❗")
       self.print(e)
 
   @commands.command(name="eval", aliases=["python", "py"])
@@ -499,7 +546,7 @@ class Client(commands.Bot):
     try:
       await ctx.send("```\n%s```" % out)
     except Exception as e:
-      await ctx.message.add_reaction("❌")
+      await ctx.message.add_reaction("❗")
       self.print(e)
 
   @commands.is_owner()
