@@ -46,6 +46,14 @@ def initlog(json):
   return logger
 
 
+def json_dump(obj, fp):
+  return json_parser.dump(obj, fp, sort_keys=True, indent=2)
+
+
+def json_dumps(obj):
+  return json_parser.dumps(obj, sort_keys=True, indent=2)
+
+
 class Client(commands.Bot):
   def __init__(self, config: list):
     args = config["args"]
@@ -295,8 +303,7 @@ class Client(commands.Bot):
     # inv_fp = "%s/inv/.json" % rootdir
     inv_fp = "%s/inv/%s.json" % (rootdir, ctx.message.author.id)
     if not os.path.exists(inv_fp):
-      with open(inv_fp, "a+") as data:
-        data.close()
+      open(inv_fp, "a+").close()
 
     with open(inv_fp, "r+") as data:
       data.seek(0)
@@ -310,8 +317,8 @@ class Client(commands.Bot):
     item = item.lower() if item is not None else None
     if quant == "?":
       if item is None:
-        inv_fp = discord.File(inv_fp)
-        await ctx.send(file=inv_fp, delete_after=10.0)
+        out = "```json\n{}\n```".format(json_dumps(inv_js))
+        await ctx.send(out, delete_after=10.0)
         return
       
       inum = inv_js.get(item, 0)
@@ -319,7 +326,7 @@ class Client(commands.Bot):
     elif quant == "-":
       with open(inv_fp, "w") as data:
         inv_js.pop(item, None)
-        json_parser.dump(inv_js, data, sort_keys=True, indent=2)
+        json_dump(inv_js, data)
 
     else:
       inum = eval(quant)
@@ -328,7 +335,7 @@ class Client(commands.Bot):
       inv_js[item] = inv_js.get(item, 0) + inum
 
       with open(inv_fp, "w") as data:
-        json_parser.dump(inv_js, data, sort_keys=True, indent=2)
+        json_dump(inv_js, data)
 
     inum = inv_js.get(item, 0)
     # fmt = "Player has {0} '{1}'"
