@@ -3,7 +3,7 @@ discord.log
 bot-org.py
 
 activate
-__pycache
+__pycache__
 
 .vscode/
 env/
