@@ -73,7 +73,7 @@ class Client(commands.Bot):
     super().__init__(prefix, *args, **kwargs)
 
     self.remove_command("help")
-    self.add_command(self.inventory)
+    self.add_command(self.dice)
     self.add_command(self.shutdown)
     self.add_command(self.refresh)
     self.add_command(self.restart)
@@ -81,6 +81,7 @@ class Client(commands.Bot):
     self.add_command(self.purge)
     self.add_command(self.shell)
     self.add_command(self._eval)
+    self.add_command(self._inventory)
     self.add_command(self._python)
     self.add_command(self._say)
 
@@ -130,42 +131,96 @@ class Client(commands.Bot):
     else:
       return False
 
-  async def message_dialogs(self, ctx, message, time=10.0):
+  async def msgdiag_delpin(self, org_msg, message, time=10.0):
     # await ctx.message.add_reaction('✅')
     await message.add_reaction('📌')
     await message.add_reaction('❌')
 
     def check_1(react, user):
-      a = user.id == ctx.message.author.id
+      a = user.id == org_msg.author.id
       b = str(react.emoji) in ('📌', '❌')
-      return a and b
+      c = react.message.id == message.id
+      return a and b and c
     
     def check_2(react, user):
-      a = user.id == ctx.message.author.id
+      a = user.id == org_msg.author.id
       b = str(react.emoji) == '📌'
-      return a and b
+      c = react.message.id == message.id
+      return a and b and c
     
     try:
       react, user = await self.wait_for(
         "reaction_add", timeout=time, check=check_1)
-    except asyncio.TimeoutError as e:
-      return await message.delete()
+    except asyncio.TimeoutError:
+      try:
+        await message.delete()
+        await org_msg.delete()
+      except Exception as e:
+        pass
+      return
     react = str(react.emoji)
 
     if react == '📌':
       react, user = await self.wait_for(
         "reaction_remove", check=check_2)
-      await message.delete()
     elif react == '❌':
       pass
     else:
-      await asyncio.sleep(time)
-    await message.delete()
+      await asyncio.sleep(time)    
 
     try:
-      await ctx.message.delete()
+      await message.delete()
+      await org_msg.delete()
     except Exception as e:
       pass
+
+  async def msgdiag_yesno(self, message, default: bool=False, time=10.0):
+    await message.add_reaction('👍')
+    await message.add_reaction('👎')
+
+    def check(react, user):
+      a = user.id == message.author.id
+      b = str(react.emoji) in ('👍', '👎')
+      c = react.message.id == message.id
+      return a and b and c
+    
+    try:
+      react, user = await self.wait_for(
+        "reaction_add", timeout=time, check=check)
+    except asyncio.TimeoutError:
+      return default
+    react = str(react.emoji)
+
+    if react == '👍':
+      return True
+    else:
+      return False
+
+  async def throw_die(self, channel: abc.Messageable, die=int):
+    out = "Rolled **{0}** from a D{1}"
+    
+    # Truncate to 1000 and add decimal places
+    if die > 1000:
+      die = 1000
+      val = randrange(1, 1001) + (randrange(0, 1000) * 0.001)
+      out + " ".join([
+        "Rolled **{0}**."
+        "\n\***(Number of sides ({1}) is over 1000.",
+        "Truncating to 1000 and adding decimal places)**"])
+    
+    # Truncate to 2 (heads and tails)
+    elif die <= 1:
+      die = 2
+      val = int(randrange(1, 3))
+      out += " ".join([
+        "\n\***(Number of sides is under 2.",
+        "Truncating to heads and tails)**"])
+    
+    # Roll N-sided die
+    else:
+      val = int(randrange(1, die + 1))
+
+    return await channel.send(out.format(val, die))
 
   async def on_connect(self):
     self.print("Connected to Discord...")
@@ -180,35 +235,21 @@ class Client(commands.Bot):
   async def on_message(self, m):
     if self.check_msg(m):
       await self.process_commands(m)
+    
+    if self.paused:
+      return
 
-    # Match die rolls (D20, d2 etc.)
-    p = re.compile(r'^\s*[Dd][+-]*\d+\s*$')
+    # Match die rolls for integers (D20, d-2, d 21, etc.)
+    p = re.compile(r'^\s*[Dd][ +\-]*\d+\s*$')
     if p.match(m.clean_content):
-      out = "Rolled **{0}** from a D{1}"
-
-      # Catch number of sides given
       die = int(re.search(r'\d+', m.clean_content).group())
-
-      # Truncate to 1000 and add decimal places
-      if die > 1000:
-        die = 1000
-        val = randrange(1, 1001) + (randrange(0, 1000) * 0.001)
-        out += " ".join([
-          "\n\***(Number of sides is over 1000.",
-          "Truncating to 1000 and adding decimal places)**"])
-      
-      # Truncate to 2 (heads and tails)
-      elif die <= 1:
-        die = 2
-        val = int(randrange(1, 3))
-        out += " ".join([
-          "\n\***(Number of sides is under 2.",
-          "Truncating to heads and tails)**"])
-
-      else:
-        val = int(randrange(1, die + 1))
-
-      await m.channel.send(out.format(val, die))
+      msg = await self.throw_die(m.channel, die)
+      await self.msgdiag_delpin(m, msg, 20.0)
+    
+    # Access, modify or delete the inventory
+    p = re.compile(r'^\s*inv(entory)* .*\s*$')
+    if p.match(m.clean_content):
+      pass    
 
   async def on_message_delete(self, m):
     if m.author.id in self._wlist["users"] or m.author.id == self.user.id:
@@ -325,9 +366,12 @@ class Client(commands.Bot):
     except Exception:
       pass
 
-  # def inventory(quant, *, item):
-  @commands.command(aliases=["inv"])
-  async def inventory(self, ctx, quant, *, item=None):
+  # @commands.command(name="inv2")
+  # async def _inventory(self, ctx, *args, **kwargs):
+  # def inventory(event, player_id, quant, item):
+
+  @commands.command(name="inventory", aliases=["inv"])
+  async def _inventory(self, ctx, quant, *, item=None):
     p = r'^(\s*[+-]*\d+(\.\d+)*([Ee][+-]*\d+)*\s*)|(\?+)|(-+)$'
     p = re.search(p, quant)
 
@@ -358,7 +402,7 @@ class Client(commands.Bot):
         if len(out) > 2000:
           out = out[:-10] + "\n...\n}```"
         m = await ctx.send(out)
-        await self.message_dialogs(ctx, m, 10.0)
+        await self.msgdiag_delpin(ctx, m, 10.0)
         return
       
       inum = inv_js.get(item, 0)
@@ -372,7 +416,7 @@ class Client(commands.Bot):
     else:
       if item is None:
         m = await ctx.send("`item is a required argument that is missing.`")
-        await self.message_dialogs(ctx, m, 10.0)
+        await self.msgdiag_delpin(ctx, m, 10.0)
         return
 
       inum = eval(quant)
@@ -388,62 +432,12 @@ class Client(commands.Bot):
     fmt = "{0.display_name} has {1} '{2}'"
     # print(fmt.format(inum, item))
     m = await ctx.send(fmt.format(ctx.message.author, inum, item))
-    await self.message_dialogs(ctx, m, 10.0)
+    await self.msgdiag_delpin(ctx, m, 10.0)
 
-  @commands.is_owner()
-  @commands.command()
-  async def doembed(self, ctx, channel_id: int, *, args_raw):
-      args_raw = self.trim_codeblock(args_raw)
-      args_raw = args_raw.replace("#i#", "­").split(" | ")
-      args = {}
-      embed = discord.Embed()
-      empty = discord.Empty
-      invis = "­"
-  
-      for arg in args_raw:
-          arg = arg.split(" = ")
-          arg[1] = arg[1] if arg[1] != "invis" else invis
-          args[arg[0]] = arg[1] if arg[1] != "empty" else empty
-  
-      embed.title = args["title"] if "title" in args else empty
-  
-      if "desc" in args:
-          embed.description = args["desc"]
-  
-      if "url" in args:
-          embed.url = args["url"]
-  
-      if "color" in args:
-          embed.color = int(args["color"], 16)
-  
-      if "image" in args:
-          embed.set_image(url=args["image"])
-  
-      if "thumbnail" in args:
-          embed.set_thumbnail(url=args["thumbnail"])
-  
-      embed.set_footer(
-          text=args["footer"] if "footer" in args else empty,
-          icon_url=args["footer_img"] if "footer_img" in args else empty)
-  
-      if "author" in args:
-          embed.set_author(
-              name=args["author"],
-              url=args["author_url"] if "author_url" in args else empty,
-              icon_url=args["author_img"] if "author_img" in args else empty)
-  
-      for arg in args:
-          if "field" in arg and "value" not in arg:
-  
-              if arg + "_value" in args:
-                  val = args[arg + "_value"]
-              else:
-                  val = invis
-  
-              embed.add_field(name=args[arg], value=val)
-  
-      dest = self.get_channel(channel_id) if channel_id != 0 else ctx
-      await dest.send(embed, nonctx_dest=dest)
+  @commands.command(aliases=["die", "d", "D"])
+  async def dice(self, ctx, *, die: int=20):
+    msg = await self.throw_die(ctx.message.channel, die)
+    await self.msgdiag_delpin(ctx.message, msg, 20.0)
 
   @commands.command()
   async def pause(self, ctx):
@@ -552,6 +546,8 @@ class Client(commands.Bot):
   @commands.is_owner()
   @commands.command(name="say")
   async def _say(self, ctx, *, message):
+    self.print(message)
+
     try:
       await ctx.message.delete()
     except Exception:
