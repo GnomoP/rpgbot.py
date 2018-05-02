@@ -1,6 +1,6 @@
 config.json
 discord.log
-bot-org.py
+activity.log
 
 activate
 __pycache__
