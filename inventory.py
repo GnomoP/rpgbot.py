@@ -4,7 +4,7 @@ import os
 import sys
 import json
 from datetime import datetime
-import bot_utils
+from json_utils import json_load
 
 
 class Inventory:
@@ -13,12 +13,18 @@ class Inventory:
       self.create_config(config_fp)
     self.cfg = self.json_load(config_fp)
 
+  def __call__(self, event, quant=0, item=None):
+    print("self: ", self)
+    print("event:", event)
+    print("quant:", quant)
+    print("item: ", item)
+
   def print(self, *args, **kwargs):
     time = datetime.now().strftime("[%T]")
     print(time, *args, **kwargs)
 
   def json_load(self, fp):
-    return bot_utils.json_load(fp, self.print)
+    return json_load(fp, self.print)
 
   def create_config(self, fp):
     """Creates a configuration file in JSON at the given filepath."""

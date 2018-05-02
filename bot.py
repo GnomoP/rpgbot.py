@@ -21,6 +21,7 @@ from json_utils import json_load, json_dump, json_dumps
 
 config_fp = os.path.dirname(os.path.realpath(__file__)) + "/config.json"
 bot = Client(config_fp)
+bot.inv = Inventory(config_fp)
 
 
 async def del_or_pin(org_message, message, time=10.0):
@@ -191,7 +192,7 @@ async def on_member_join(member):
 
 @bot.command(aliases=["inv"])
 async def inventory(ctx, quant, *, item=None):
-  p = r'^(\s*(\d+)|(\?{1})|(-{1})$'
+  p = r'^\s*(\d+)|(\?{1})|(-{1})\s*$'
   p = re.search(p, quant)
 
   if not p:
@@ -199,7 +200,7 @@ async def inventory(ctx, quant, *, item=None):
     bot.print("Bad value given to inventory command: '%s'" % quant)
     return
 
-  fp = bot.rootfp + "/" + ctx.message.author.id + ".json"
+  fp = bot.rootfp + "/" + str(ctx.message.author.id) + ".json"
   if not os.path.exists(fp):
     open(fp, "a+").close()
 
@@ -209,8 +210,7 @@ async def inventory(ctx, quant, *, item=None):
       data.write("{\n\n}")
       data.truncate()
 
-    data.seek(0)
-    inv = json_load(data, bot.print)
+  inv = json_load(fp, bot.print)
 
   item = item.lower() if item is not None else None
   if quant == "?":
@@ -219,8 +219,7 @@ async def inventory(ctx, quant, *, item=None):
       if len(out) > 2000:
         out = out[:-10] + "\n...\n}```"
       m = await ctx.send(out)
-      await bot.msgdiag_delpin(ctx, m, 10.0)
-      return
+      return await del_or_pin(ctx, m, 10.0)
 
     inum = inv.get(item, 0)
 
@@ -248,6 +247,16 @@ async def inventory(ctx, quant, *, item=None):
   fmt = "{0.display_name} has {1} '{2}'"
   m = await ctx.send(fmt.format(ctx.message.author, inum, item))
   await del_or_pin(ctx, m, 10.0)
+
+
+def _inventory(*args):
+  if not args:
+    print("args is empty")
+  if len(args) > 1:
+    print(len(args), "args")
+  print(args)
+
+  bot.inv(*args)
 
 
 @bot.command(aliases=["die", "d", "D"])
@@ -329,7 +338,7 @@ async def python3(ctx, *, pycode="import this"):
 
 if __name__ == "__main__":
   if len(sys.argv) < 2:
-    fp = os.path.dirname(os.path.realpath(__file__)) + "/inv/config.json"
+    fp = os.path.dirname(os.path.realpath(__file__)) + "/config.json"
   else:
     fp = " ".join(sys.argv[1:])
 
