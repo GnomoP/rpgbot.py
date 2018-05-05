@@ -41,7 +41,7 @@ async def del_or_pin(org_message, message, time=10.0):
       await message.delete()
       await org_message.delete()
     except Exception as e:
-      pass
+      bot.print(e)
     return
   react = str(react.emoji)
 
@@ -52,7 +52,7 @@ async def del_or_pin(org_message, message, time=10.0):
     return a and b and c
 
   if react == '📌':
-    react, user = await bot.wait_for("reaction_remove", check=check)
+    await bot.wait_for("reaction_remove", check=check)
   elif react == '❌':
     pass
   else:
@@ -62,7 +62,7 @@ async def del_or_pin(org_message, message, time=10.0):
     await message.delete()
     await org_message.delete()
   except Exception as e:
-    pass
+    bot.print(e)
 
 
 async def yesno_diag(message, default: bool=False, time=10.0):
@@ -186,8 +186,8 @@ async def on_member_join(member):
 
 
 @bot.command(name="inv")
-async def inventory(ctx, quant, *, item=None):
-  p = r"^\s*([+\-]*\d+(\.\d+)*([Ee][+\-]*\d+)*)|(\?)|(-)\s*$"
+async def inventory(ctx, quant="?", *, item=None):
+  p = r"^\s*([+\-]*\d+(\.\d+)*([Ee][+\-]*\d+)*)|(\?)|(\-)\s*$"
   p = re.search(p, quant)
 
   if not p:
@@ -195,7 +195,7 @@ async def inventory(ctx, quant, *, item=None):
     bot.print("Bad value given to inventory command: '%s'" % quant)
     return
 
-  fp = bot.rootfp + "/" + str(ctx.message.author.id) + ".json"
+  fp = bot.rootfp + "/inv/" + str(ctx.message.author.id) + ".json"
   if not os.path.exists(fp):
     open(fp, "a+").close()
 
@@ -206,34 +206,58 @@ async def inventory(ctx, quant, *, item=None):
       data.truncate()
 
   inv = json_load(fp, bot.print)
-
   item = item.lower() if item is not None else None
+
   if quant == "?":
     if item is None:
       out = "```json\n{}\n```".format(json_dumps(inv))
+
       if len(out) > 2000:
         out = out[:-10] + "\n...\n}```"
+
       m = await ctx.send(out)
-      return await del_or_pin(ctx, m, 10.0)
+      return await del_or_pin(ctx.message, m, 10.0)
 
     inum = inv.get(item, 0)
 
   elif quant == "-":
     inv.pop(item, None)
 
-    with open(inv, "w") as data:
+    with open(fp, "w") as data:
       json_dump(inv, data)
 
   else:
-    if item is None:
-      m = await ctx.send("`item is a required argument that is missing.`")
-      await bot.msgdiag_delpin(ctx, m, 10.0)
-      return
+    if ctx.guild.get_member(eval(quant)):
+      id = ctx.guild.get_member(eval(quant)).id
+      fp = bot.rootfp + "/inv/" + str(id) + ".json"
 
-    inum = eval(quant)
-    if float(inum).is_integer:
-      inum = int(inum)
-    inv[item] = inv.get(item, 0) + inum
+      if not os.path.exists(fp):
+        open(fp, "a+").close()
+
+      with open(fp, "r+") as data:
+        data.seek(0)
+        if not data.read():
+          data.write("{\n\n}")
+          data.truncate()
+
+      inv = json_load(fp, bot.print)
+      out = "```json\n{}\n```".format(json_dumps(inv))
+
+      if len(out) > 2000:
+        out = out[:-10] + "\n...\n}```"
+
+      m = await ctx.send(out)
+      return await del_or_pin(ctx.message, m, 10.0)
+
+    elif item is None:
+      m = await ctx.send("`item is a required argument that is missing.`")
+      return await del_or_pin(ctx, m, 10.0)
+
+    else:
+      inum = eval(quant)
+      if float(inum).is_integer:
+        inum = int(inum)
+      inv[item] = inv.get(item, 0) + inum
 
     with open(fp, "w") as data:
       json_dump(inv, data)
@@ -241,7 +265,7 @@ async def inventory(ctx, quant, *, item=None):
   inum = inv.get(item, 0)
   fmt = "{0.display_name} has {1} '{2}'"
   m = await ctx.send(fmt.format(ctx.message.author, inum, item))
-  await del_or_pin(ctx, m, 10.0)
+  await del_or_pin(ctx.message, m, 10.0)
 
 
 async def inventory_cmd(ctx, *args):
