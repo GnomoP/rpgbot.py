@@ -33,7 +33,6 @@ class Client(commands.Bot):
     self.remove_command("help")
     self.add_command(self.shutdown)
     self.add_command(self.restart)
-    self.add_command(self.refresh)
     self.add_command(self.pause)
     self.add_command(self.purge)
     self.add_command(self.say)
@@ -134,30 +133,6 @@ class Client(commands.Bot):
     os.execl(sys.executable, sys.executable, *sys.argv)
 
   @commands.command()
-  async def refresh(self, ctx):
-    try:
-      self.config = json_load(self.rootfp, self.print)
-      self._wlist = self.config["wlist"]
-      self._blist = self.config["blist"]
-      self.timeout = self.config["delete_timeout"]
-
-      game = discord.Game(self.config["status"])
-      await self.change_presence(status=discord.Status.online, activity=game)
-
-    except Exception as e:
-      await ctx.message.add_reaction("❗")
-      self.print(e)
-    else:
-      await ctx.message.add_reaction("🔁")
-
-    await asyncio.sleep(self.timeout) if self.timeout else None
-
-    try:
-      await ctx.message.delete() if self.timeout else None
-    except Exception:
-      pass
-
-  @commands.command()
   async def pause(self, ctx):
     self.paused = not self.paused
 
@@ -175,7 +150,7 @@ class Client(commands.Bot):
 
   @commands.is_owner()
   @commands.command()
-  async def purge(ctx, limit: int=100):
+  async def purge(self, ctx, limit: int=100):
     deleted = len(await ctx.channel.purge(limit=limit + 1))
     await ctx.send("Deleted %s message(s)" % deleted, delete_after=10.0)
 

@@ -14,14 +14,14 @@ import discord
 from discord import abc
 from discord.ext import commands
 from client import Client
-from inventory import Inventory
+# from inventory import Inventory
 from bot_utils import initlog, trim_codeblocks
 from json_utils import json_load, json_dump, json_dumps
 
+root = os.path.dirname(os.path.realpath(__file__))
 
-config_fp = os.path.dirname(os.path.realpath(__file__)) + "/config.json"
-bot = Client(config_fp)
-bot.inv = Inventory(config_fp)
+bot = Client(root + "/config.json")
+# bot.inv = Inventory(root + "/inv/config.json")
 
 
 async def del_or_pin(org_message, message, time=10.0):
@@ -93,7 +93,7 @@ async def throw_die(channel: abc.Messageable, die=int):
   # Truncate to 1000 and add decimal places
   if die > 1000:
     die = 1000
-    val = randrange(1, 1001) + (randrange(0, 1000) * 0.001)
+    val = randrange(1000) + (randrange(0, 1000) * 0.001)
     out + " ".join([
       "Rolled **{0}**."
       "\n\***(Number of sides ({1}) is over 1000.",
@@ -135,16 +135,11 @@ async def on_message(m):
     return
 
   # Match die rolls for integers (D20, d-2, d 21, etc.)
-  p = re.compile(r'^\s*[Dd][ +\-]*\d+\s*$')
+  p = re.compile(r"^\s*[Dd][ +\-]*\d+\s*$")
   if p.match(m.clean_content):
-    die = int(re.search(r'\d+', m.clean_content).group())
+    die = int(re.search(r"\d+", m.clean_content).group())
     msg = await throw_die(m.channel, die)
     await del_or_pin(m, msg, 20.0)
-
-  # Access, modify or delete the inventory
-  p = re.compile(r'^\s*inv(entory)* .*\s*$')
-  if p.match(m.clean_content):
-    pass
 
 
 @bot.event
@@ -190,9 +185,9 @@ async def on_member_join(member):
       "{0.mention} é um Plebeu. Siga as normas, *rusticus*.".format(member))
 
 
-@bot.command(aliases=["inv"])
+@bot.command(name="inv")
 async def inventory(ctx, quant, *, item=None):
-  p = r'^\s*(\d+)|(\?{1})|(-{1})\s*$'
+  p = r"^\s*([+\-]*\d+(\.\d+)*([Ee][+\-]*\d+)*)|(\?)|(-)\s*$"
   p = re.search(p, quant)
 
   if not p:
@@ -249,14 +244,81 @@ async def inventory(ctx, quant, *, item=None):
   await del_or_pin(ctx, m, 10.0)
 
 
-def _inventory(*args):
-  if not args:
-    print("args is empty")
-  if len(args) > 1:
-    print(len(args), "args")
-  print(args)
+async def inventory_cmd(ctx, *args):
+  kw = {"event": None, "id": ctx.message.author.id,
+        "quant": 0, "item": ""}
 
-  bot.inv(*args)
+  if len(args) == 0:
+    kw["event"] = "show"
+
+  elif args[0] == "?":
+    kw["event"] = "show"
+
+    if len(args) >= 2:
+      if args[1].isdecimal() and ctx.guild.get_member(int(args[1])):
+        kw["id"] = int(args[1])
+
+        if len(args) >= 3:
+          kw["item"] = " ".join(args[2:])
+
+      else:
+        kw["item"] = " ".join(args[1:])
+
+  elif args[0] == "-":
+    kw["event"] = "del"
+
+    if len(args) >= 2:
+      if args[1].isdecimal() and ctx.guild.get_member(int(args[1])):
+        kw["id"] = int(args[1])
+
+        if len(args) >= 3:
+          kw["item"] = " ".join(args[2:])
+
+      else:
+        kw["item"] = " ".join(args[1:])
+
+  elif re.search(r"^\s*[+\-]*\d+(\.\d+)*([Ee]\d+(\.\d+)*)*\s*$", args[0]):
+    kw["event"] = "add"
+    kw["quant"] = eval(args[0])
+
+    if len(args) >= 2:
+      kw["item"] = " ".join(args[1:])
+
+  else:
+    try:
+      await ctx.message.add_reaction("❗")
+      await asyncio.sleep(bot.timeout) if bot.timeout else None
+      await ctx.message.delete() if bot.timeout else None
+    except Exception as e:
+      bot.print(e)
+    return
+
+  args = bot.inv(**kw)
+  if args is False:
+    try:
+      await ctx.message.add_reaction("❗")
+      await asyncio.sleep(bot.timeout) if bot.timeout else None
+      await ctx.message.delete() if bot.timeout else None
+    except Exception as e:
+      bot.print(e)
+    return
+
+  if args[4]:
+    fmt = "{0.display_name} has {1} '{2}'"
+    args = ctx.message.author, args[3], args[4]
+
+  else:
+    fmt = "```json\n//Inventory for {0.display_name}\n{1}```"
+    args = ctx.message.author, json_dumps(args[0])
+
+  msg = await ctx.send(fmt.format(*args))
+  await del_or_pin(ctx.message, msg, 20.0)
+
+  await asyncio.sleep(bot.timeout) if bot.timeout else None
+  try:
+    await ctx.message.delete() if bot.timeout else None
+  except Exception:
+    pass
 
 
 @bot.command(aliases=["die", "d", "D"])
@@ -268,6 +330,31 @@ async def dice(ctx, *, die: int=20):
 
   try:
     await ctx.message.delete() if bot.timeout else None
+  except Exception:
+    pass
+
+
+@bot.command()
+async def refresh(self, ctx):
+  try:
+    self.config = json_load(self.rootfp, self.print)
+    self._wlist = self.config["wlist"]
+    self._blist = self.config["blist"]
+    self.timeout = self.config["delete_timeout"]
+
+    game = discord.Game(self.config["status"])
+    await self.change_presence(status=discord.Status.online, activity=game)
+
+  except Exception as e:
+    await ctx.message.add_reaction("❗")
+    self.print(e)
+  else:
+    await ctx.message.add_reaction("🔁")
+
+  await asyncio.sleep(self.timeout) if self.timeout else None
+
+  try:
+    await ctx.message.delete() if self.timeout else None
   except Exception:
     pass
 

@@ -9,5 +9,7 @@ __pycache__
 env/
 inv/
 
+inventory.py
+
 *~
 *.swp
