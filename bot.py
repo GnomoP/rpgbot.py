@@ -263,8 +263,12 @@ async def inventory(ctx, quant="?", *, item=None):
       json_dump(inv, data)
 
   inum = inv.get(item, 0)
-  fmt = "{0.display_name} has {1} '{2}'"
-  m = await ctx.send(fmt.format(ctx.message.author, inum, item))
+  if inum == 0 and item == None:
+    fmt = "{0.display_name} has nothing."
+    m = await ctx.send(fmt.format(ctx.message.author))
+  else:
+    fmt = "{0.display_name} has {1} '{2}'"
+    m = await ctx.send(fmt.format(ctx.message.author, inum, item))
   await del_or_pin(ctx.message, m, 10.0)
 
 
