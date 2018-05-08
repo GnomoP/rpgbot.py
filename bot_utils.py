@@ -1,11 +1,9 @@
-#!/usr/bin/env python3.6
+#!./env/bin/python
 
-import sys
-import json
 import logging
 
 
-def trim_codeblocks(self, string):
+def trim_codeblocks(string):
   string = string[1:] if string.startswith("\n") else string
   string = string[3:-3] if string.startswith("```") else string
   string = string[1:-1] if string.startswith("`") else string

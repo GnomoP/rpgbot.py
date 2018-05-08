@@ -1,10 +1,9 @@
-#!/usr/bin/env python3.6
+#!./env/bin/python
 
 import os
 import sys
 import time
 import asyncio
-from random import randrange
 from datetime import datetime
 from subprocess import Popen
 import discord

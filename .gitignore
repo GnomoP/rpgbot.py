@@ -1,10 +1,12 @@
 config.json
+
+bot.log
 discord.log
 activity.log
 
 activate
-__pycache__
 
+__pycache__
 .vscode/
 env/
 inv/

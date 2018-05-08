@@ -1,12 +1,9 @@
-#!/usr/bin/env python3.6
+#!./env/bin/python
 
 import re
 import os
 import sys
-import time
-import json
 import asyncio
-import logging
 from random import randrange
 from datetime import datetime
 from subprocess import Popen, PIPE
@@ -14,7 +11,7 @@ import discord
 from discord import abc
 from discord.ext import commands
 from client import Client
-# from inventory import Inventory
+from inventory import Inventory
 from bot_utils import initlog, trim_codeblocks
 from json_utils import json_load, json_dump, json_dumps
 
@@ -263,7 +260,7 @@ async def inventory(ctx, quant="?", *, item=None):
       json_dump(inv, data)
 
   inum = inv.get(item, 0)
-  if inum == 0 and item == None:
+  if inum == 0 and item is None:
     fmt = "{0.display_name} has nothing."
     m = await ctx.send(fmt.format(ctx.message.author))
   else:

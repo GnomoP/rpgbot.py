@@ -1,8 +1,6 @@
-#!/usr/bin/env python3.6
+#!./env/bin/python
 
 import os
-import sys
-import json
 from datetime import datetime
 from json_utils import json_load, json_dump, json_dumps
 

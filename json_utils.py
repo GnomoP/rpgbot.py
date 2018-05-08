@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!./env/bin/python
 
 import sys
 import json
